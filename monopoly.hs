@@ -28,7 +28,7 @@ carolina = Jugador {
 
 manuel = Jugador {
  nombre                 = "Manuel",
- cantidadDeDinero       = 500,
+ cantidadDeDinero       = 450,
  tacticaDeJuego         = "Oferente singular",
  propiedadesCompradas   = [],
  accionesQueHicieron    = [pasarPorElBanco, enojarse]
@@ -52,8 +52,8 @@ mapNombre f jugador = jugador {nombre = f (nombre jugador)}
 mapCantidadDeDinero :: (Int -> Int) -> Jugador -> Jugador
 mapCantidadDeDinero f jugador = jugador { cantidadDeDinero = max 0 . f $ cantidadDeDinero jugador }
 
-mapTacticaDeJuego :: Tactica -> Jugador -> Jugador
-mapTacticaDeJuego tacticaNueva jugador = jugador {tacticaDeJuego = tacticaNueva}
+mapTacticaDeJuego :: (Tactica -> Tactica) -> Jugador -> Jugador
+mapTacticaDeJuego f jugador = jugador {tacticaDeJuego = f (tacticaDeJuego jugador)}
 
 mapAccionesQueHicieron :: ([Accion] -> [Accion]) -> Jugador -> Jugador 
 mapAccionesQueHicieron f jugador = jugador { accionesQueHicieron = f $ accionesQueHicieron jugador}
@@ -70,7 +70,7 @@ agregarPropiedad propiedad = mapPropiedad (propiedad :)
 -- Funciones para Resolucion de Problemas --
 
 pasarPorElBanco :: Accion
-pasarPorElBanco = mapTacticaDeJuego ("Comprador compulsivo") . mapCantidadDeDinero (+40)
+pasarPorElBanco = mapTacticaDeJuego (const "Comprador compulsivo") . mapCantidadDeDinero (+40)
 
 enojarse :: Accion
 enojarse = agregarAcciones gritar . mapCantidadDeDinero (+50)
@@ -80,32 +80,27 @@ gritar = mapNombre ("AHHHH "++)
 
 subastar :: Propiedad -> Accion
 subastar propiedad jugador
- | tieneTacticasNecesarias jugador = agregarPropiedad propiedad (mapCantidadDeDinero (subtract (precioPropiedad propiedad)) jugador)
+ | tieneTacticasNecesarias (tacticaDeJuego jugador) = ganarPropiedad propiedad jugador
  | otherwise = id jugador
 
-tieneTacticasNecesarias :: Jugador -> Bool
-tieneTacticasNecesarias jugador = tacticaDeJuego jugador == "Accionista" || tacticaDeJuego jugador == "Oferente singular"
+ganarPropiedad :: Propiedad -> Jugador -> Jugador
+ganarPropiedad propiedad = agregarPropiedad propiedad . mapCantidadDeDinero (subtract (precioPropiedad propiedad))
+
+tieneTacticasNecesarias :: String -> Bool
+tieneTacticasNecesarias "Accionista" = True
+tieneTacticasNecesarias "Oferente singular" = True
+tieneTacticasNecesarias otros = False
 
 cobrarAlquileres :: Accion
-cobrarAlquileres jugador = mapCantidadDeDinero (+precioTotalDePropiedadBarata jugador) (mapCantidadDeDinero (+precioTotalDePropiedadCaro jugador) jugador)
+cobrarAlquileres jugador =  flip mapCantidadDeDinero jugador (+ ( sum $ map (precioAlquiler) (propiedadesCompradas jugador)))
 
 esPropiedadBarata :: Propiedad -> Bool
 esPropiedadBarata = (<150) . precioPropiedad
 
-esPropiedadCaro :: Propiedad -> Bool
-esPropiedadCaro = (>=150) . precioPropiedad
-
-cantidadDePropiedadBarata :: Jugador -> Int
-cantidadDePropiedadBarata = length . filter esPropiedadBarata . propiedadesCompradas
-
-cantidadDePropiedadCaro :: Jugador -> Int
-cantidadDePropiedadCaro = length . filter esPropiedadCaro . propiedadesCompradas
-
-precioTotalDePropiedadBarata :: Jugador -> Int
-precioTotalDePropiedadBarata = (*10) . cantidadDePropiedadBarata
-
-precioTotalDePropiedadCaro :: Jugador -> Int
-precioTotalDePropiedadCaro = (*20) . cantidadDePropiedadCaro
+precioAlquiler :: Propiedad -> Int
+precioAlquiler propiedad
+ | esPropiedadBarata propiedad = 10
+ | otherwise = 20
 
 pagarAAccionistas :: Accion
 pagarAAccionistas jugador 
@@ -115,16 +110,25 @@ pagarAAccionistas jugador
 esAccionista :: Jugador -> Bool
 esAccionista = (== "Accionista" ) . tacticaDeJuego 
 
-hacerBerrinchePor :: Accion
-hacerBerrinchePor = gritar . mapCantidadDeDinero (+10)
+hacerBerrinchePor :: Propiedad -> Accion
+hacerBerrinchePor propiedad jugador 
+ | not (puedeComprarLaPropiedad propiedad jugador) = hacerBerrinchePor propiedad . gritar . mapCantidadDeDinero (+10) $ jugador
+ | otherwise = ganarPropiedad propiedad jugador
 
-ultimaRonda :: Accion
-ultimaRonda jugador = foldr ($) jugador $ accionesQueHicieron jugador  
+puedeComprarLaPropiedad :: Propiedad -> Jugador -> Bool
+puedeComprarLaPropiedad propiedad = (>= (precioPropiedad propiedad)) . cantidadDeDinero 
 
-juegoFinal :: Jugador -> Jugador -> String
+ultimaRonda :: Jugador -> (Accion)
+ultimaRonda jugador = foldl1 (.) $ accionesQueHicieron jugador 
+
+
+juegoFinal :: Jugador -> Jugador -> Jugador
 juegoFinal jugador1 jugador2 
- | dineroDespuesDeUltimaRonda jugador1 > dineroDespuesDeUltimaRonda jugador2 = nombre jugador1
- | otherwise = nombre jugador2
+ | dineroDespuesDeUltimaRonda jugador1 > dineroDespuesDeUltimaRonda jugador2 = jugador1
+ | otherwise = jugador2
 
 dineroDespuesDeUltimaRonda :: Jugador -> Int
-dineroDespuesDeUltimaRonda = cantidadDeDinero . ultimaRonda
+dineroDespuesDeUltimaRonda = cantidadDeDinero . terminarRonda
+
+terminarRonda :: Accion 
+terminarRonda jugador = (ultimaRonda jugador) jugador
