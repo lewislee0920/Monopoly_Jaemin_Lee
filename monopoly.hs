@@ -124,8 +124,8 @@ ultimaRonda jugador = foldl1 (.) $ accionesQueHicieron jugador
 
 juegoFinal :: Jugador -> Jugador -> Jugador
 juegoFinal jugador1 jugador2 
- | dineroDespuesDeUltimaRonda jugador1 > dineroDespuesDeUltimaRonda jugador2 = jugador1
- | otherwise = jugador2
+ | dineroDespuesDeUltimaRonda jugador1 > dineroDespuesDeUltimaRonda jugador2 = terminarRonda jugador1
+ | otherwise = terminarRonda jugador2
 
 dineroDespuesDeUltimaRonda :: Jugador -> Int
 dineroDespuesDeUltimaRonda = cantidadDeDinero . terminarRonda
